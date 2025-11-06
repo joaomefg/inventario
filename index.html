@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inventário Escolar</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Inventário da Escola</h1>
+      <p>Cadastro e gestão de patrimônio com fotos</p>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>Novo Item</h2>
+        <form id="item-form" autocomplete="off">
+          <div class="field-group">
+            <label for="numeroPatrimonio">Número de patrimônio</label>
+            <div class="inline-field">
+              <input id="numeroPatrimonio" name="numeroPatrimonio" type="text" inputmode="numeric" pattern="[0-9]*" required placeholder="Escaneie ou digite o número" />
+              <button type="button" id="scanPatrimonio" class="btn">Ler código de barras</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="nomeObjeto">Nome do objeto</label>
+            <input id="nomeObjeto" name="nomeObjeto" type="text" required placeholder="Ex.: Projetor Epson" />
+          </div>
+
+          <div class="field-group">
+            <label for="localizacaoTexto">Localização (texto)</label>
+            <input id="localizacaoTexto" name="localizacaoTexto" type="text" placeholder="Ex.: Sala 12, armário 3" />
+          </div>
+
+          <div class="field-group">
+            <label for="fotoObjeto">Foto do objeto</label>
+            <input id="fotoObjeto" name="fotoObjeto" type="file" accept="image/*" capture="environment" />
+            <div class="preview" id="previewFotoObjeto"></div>
+            <div class="actions" style="margin-top:6px">
+              <button type="button" id="clearFotoObjeto" class="btn" disabled>Remover foto</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="fotoLocalizacao">Foto da localização do objeto</label>
+            <input id="fotoLocalizacao" name="fotoLocalizacao" type="file" accept="image/*" capture="environment" />
+            <div class="preview" id="previewFotoLocalizacao"></div>
+            <div class="actions" style="margin-top:6px">
+              <button type="button" id="clearFotoLocalizacao" class="btn" disabled>Remover foto</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn primary">Salvar item</button>
+            <button type="reset" class="btn">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="list-header">
+          <h2>Itens cadastrados</h2>
+          <input id="busca" type="search" placeholder="Buscar por patrimônio, nome ou localização" />
+        </div>
+        <div id="itens-lista" class="grid"></div>
+      </section>
+      
+      <!-- Modal de Scanner -->
+      <div id="scannerOverlay" class="overlay hidden" aria-hidden="true">
+        <div class="modal">
+          <h2>Escanear código de barras</h2>
+          <video id="scannerVideo" autoplay playsinline muted></video>
+          <div class="actions" style="margin-top:10px">
+            <button type="button" id="fecharScanner" class="btn">Cancelar</button>
+          </div>
+          <p class="hint">Aponte a câmera para o código de barras. O número será preenchido automaticamente.</p>
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="app-footer">
+      <small>Inventário Escolar • Armazenamento local no navegador</small>
+    </footer>
+
+    <!-- Modal de confirmação de remoção (fora do main para evitar conflitos de empilhamento) -->
+    <div id="confirmOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="modal">
+        <h2>Confirmar remoção</h2>
+        <p id="confirmText" class="hint">Tem certeza que deseja remover este item?</p>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" id="confirmDelete" class="btn primary">Remover</button>
+          <button type="button" id="cancelDelete" class="btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
