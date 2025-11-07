@@ -34,21 +34,23 @@
             <input id="localizacaoTexto" name="localizacaoTexto" type="text" placeholder="Ex.: Sala 12, armário 3" />
           </div>
 
-          <div class="field-group">
-            <label for="fotoObjeto">Foto do objeto</label>
-            <input id="fotoObjeto" name="fotoObjeto" type="file" accept="image/*" capture="environment" />
-            <div class="preview" id="previewFotoObjeto"></div>
-            <div class="actions" style="margin-top:6px">
-              <button type="button" id="clearFotoObjeto" class="btn" disabled>Remover foto</button>
+          <div class="two-cols">
+            <div class="field-group">
+              <label for="fotoObjeto">Foto do objeto</label>
+              <input id="fotoObjeto" name="fotoObjeto" type="file" accept="image/*" capture="environment" />
+              <div class="preview" id="previewFotoObjeto"></div>
+              <div class="actions" style="margin-top:6px">
+                <button type="button" id="clearFotoObjeto" class="btn" disabled>Remover foto</button>
+              </div>
             </div>
-          </div>
 
-          <div class="field-group">
-            <label for="fotoLocalizacao">Foto da localização do objeto</label>
-            <input id="fotoLocalizacao" name="fotoLocalizacao" type="file" accept="image/*" capture="environment" />
-            <div class="preview" id="previewFotoLocalizacao"></div>
-            <div class="actions" style="margin-top:6px">
-              <button type="button" id="clearFotoLocalizacao" class="btn" disabled>Remover foto</button>
+            <div class="field-group">
+              <label for="fotoLocalizacao">Localização do objeto</label>
+              <input id="fotoLocalizacao" name="fotoLocalizacao" type="file" accept="image/*" capture="environment" />
+              <div class="preview" id="previewFotoLocalizacao"></div>
+              <div class="actions" style="margin-top:6px">
+                <button type="button" id="clearFotoLocalizacao" class="btn" disabled>Remover foto</button>
+              </div>
             </div>
           </div>
 
@@ -64,7 +66,7 @@
           <h2>Itens cadastrados</h2>
           <input id="busca" type="search" placeholder="Buscar por patrimônio, nome ou localização" />
         </div>
-        <div id="itens-lista" class="grid"></div>
+        <div id="itens-lista" class="list"></div>
       </section>
       
       <!-- Modal de Scanner -->

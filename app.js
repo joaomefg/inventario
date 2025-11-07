@@ -57,33 +57,39 @@ fotoLocalizacaoInput.addEventListener('change', () => {
 });
 
 clearFotoObjetoBtn.addEventListener('click', () => {
+  // Evita ação se não há arquivo selecionado
+  if (!(fotoObjetoInput.files && fotoObjetoInput.files.length)) return;
+  const ok = window.confirm('Tem certeza que deseja remover a foto do objeto?');
+  if (!ok) return;
   fotoObjetoInput.value = '';
   previewFotoObjeto.innerHTML = '';
   updateClearButtons();
 });
 
 clearFotoLocalizacaoBtn.addEventListener('click', () => {
+  // Evita ação se não há arquivo selecionado
+  if (!(fotoLocalizacaoInput.files && fotoLocalizacaoInput.files.length)) return;
+  const ok = window.confirm('Tem certeza que deseja remover a foto da localização?');
+  if (!ok) return;
   fotoLocalizacaoInput.value = '';
   previewFotoLocalizacao.innerHTML = '';
   updateClearButtons();
 });
 
 function cardTemplate(item) {
-  const thumb = item.fotoObjeto || item.fotoLocalizacao;
   return `
-    <div class="item-card" data-id="${item.id}">
-      ${thumb ? `<img class="thumb" src="${thumb}" alt="thumb" />` : `<div class="thumb"></div>`}
+    <div class="item-card list-row" data-id="${item.id}">
+      <div class="thumbs">
+        ${item.fotoObjeto ? `<img src="${item.fotoObjeto}" alt="Objeto" />` : ''}
+        ${item.fotoLocalizacao ? `<img src="${item.fotoLocalizacao}" alt="Localização" />` : ''}
+      </div>
       <div class="content">
         <h3 class="title">${item.nomeObjeto}</h3>
         <p class="meta">Patrimônio: ${item.numeroPatrimonio}</p>
         ${item.localizacaoTexto ? `<p class="meta">Localização: ${item.localizacaoTexto}</p>` : ''}
-        <div class="pics">
-          ${item.fotoObjeto ? `<img src="${item.fotoObjeto}" alt="Objeto" />` : ''}
-          ${item.fotoLocalizacao ? `<img src="${item.fotoLocalizacao}" alt="Localização" />` : ''}
-        </div>
-        <div class="actions" style="margin-top:10px">
-          <button class="btn" data-action="remover">Remover</button>
-        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>
       </div>
     </div>
   `;
