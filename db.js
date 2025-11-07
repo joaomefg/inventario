@@ -216,3 +216,25 @@ export async function deleteItem(id) {
   }
   return deleteItemLocal(id);
 }
+
+// ---------- Diagnóstico de backend ----------
+// Retorna estado do Supabase e, se habilitado, testa conectividade/tabela.
+export async function getBackendStatus() {
+  const status = { supabaseEnabled: SUPABASE_ENABLED, supabaseReachable: false, error: null };
+  if (!SUPABASE_ENABLED) return status;
+  try {
+    const client = await getSupabaseClient();
+    const { error } = await client
+      .from(SUPABASE_TABLE)
+      .select('id')
+      .limit(1);
+    if (error) {
+      status.error = `${error.code || 'ERR'}: ${error.message || 'Falha ao consultar tabela'}`;
+    } else {
+      status.supabaseReachable = true;
+    }
+  } catch (e) {
+    status.error = e?.message || String(e);
+  }
+  return status;
+}

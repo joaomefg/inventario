@@ -1,4 +1,4 @@
-import { addItem, getItems, deleteItem } from './db.js';
+import { addItem, getItems, deleteItem, getBackendStatus } from './db.js';
 
 const form = document.getElementById('item-form');
 const lista = document.getElementById('itens-lista');
@@ -191,6 +191,33 @@ busca.addEventListener('input', (e) => carregarLista(e.target.value));
 
 // Inicialização
 carregarLista();
+
+// Status de backend (Supabase vs local)
+async function updateBackendStatus() {
+  const el = document.getElementById('backendStatus');
+  if (!el) return;
+  try {
+    const status = await getBackendStatus();
+    if (!status.supabaseEnabled) {
+      el.textContent = 'Modo local (IndexedDB) — credenciais ausentes';
+      el.className = 'backend-status offline';
+    } else if (status.supabaseReachable) {
+      el.textContent = 'Conectado ao Supabase';
+      el.className = 'backend-status ok';
+    } else {
+      el.textContent = `Falha no Supabase — usando local (${status.error || 'erro desconhecido'})`;
+      el.className = 'backend-status offline';
+    }
+  } catch (e) {
+    const el = document.getElementById('backendStatus');
+    if (el) {
+      el.textContent = `Diagnóstico indisponível: ${e?.message || e}`;
+      el.className = 'backend-status offline';
+    }
+  }
+}
+
+updateBackendStatus();
 
 // --- Scanner de código de barras ---
 let codeReader = null;
