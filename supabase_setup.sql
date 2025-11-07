@@ -41,6 +41,7 @@ create policy inventario_select_public
 create policy inventario_insert_public
   on public.inventario for insert
   with check (true);
+  with check (true);
 
 create policy inventario_delete_public
   on public.inventario for delete
@@ -52,7 +53,7 @@ create policy inventario_delete_public
 -- =============================
 -- Cria bucket público via insert direto (compatível quando a função create_bucket não existe)
 insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
-select 'inventario-fotos', 'inventario-fotos', true, null, 10485760::bigint
+select 'inventario-fotos', 'inventario-fotos', true, '{image/jpeg,image/png,image/webp}'::text[], 10485760::bigint
 where not exists (select 1 from storage.buckets where id = 'inventario-fotos');
 
 -- Remover políticas existentes relacionadas ao bucket
@@ -68,12 +69,12 @@ create policy storage_select_public_inventario
 -- Permitir upload (insert) para o bucket
 create policy storage_insert_public_inventario
   on storage.objects for insert
-  with check (bucket_id = 'inventario-fotos');
+  with check (bucket_id = 'inventario-fotos' and name like 'itens/%');
 
 -- Permitir delete de objetos do bucket
 create policy storage_delete_public_inventario
   on storage.objects for delete
-  using (bucket_id = 'inventario-fotos');
+  using (bucket_id = 'inventario-fotos' and name like 'itens/%');
 
 
 -- =====================================================

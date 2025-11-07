@@ -76,17 +76,36 @@ clearFotoLocalizacaoBtn.addEventListener('click', () => {
   updateClearButtons();
 });
 
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeImgUrl(url) {
+  const s = String(url || '');
+  return /^(https?:|blob:|data:)/i.test(s) ? s : '';
+}
+
 function cardTemplate(item) {
+  const nome = escapeHtml(item.nomeObjeto);
+  const patrimonio = escapeHtml(item.numeroPatrimonio);
+  const localTxt = escapeHtml(item.localizacaoTexto || '');
+  const objUrl = safeImgUrl(item.fotoObjeto);
+  const locUrl = safeImgUrl(item.fotoLocalizacao);
   return `
     <div class="item-card list-row" data-id="${item.id}">
       <div class="thumbs">
-        ${item.fotoObjeto ? `<img src="${item.fotoObjeto}" alt="Objeto" />` : ''}
-        ${item.fotoLocalizacao ? `<img src="${item.fotoLocalizacao}" alt="Localização" />` : ''}
+        ${objUrl ? `<img src="${objUrl}" alt="Objeto" />` : ''}
+        ${locUrl ? `<img src="${locUrl}" alt="Localização" />` : ''}
       </div>
       <div class="content">
-        <h3 class="title">${item.nomeObjeto}</h3>
-        <p class="meta">Patrimônio: ${item.numeroPatrimonio}</p>
-        ${item.localizacaoTexto ? `<p class="meta">Localização: ${item.localizacaoTexto}</p>` : ''}
+        <h3 class="title">${nome}</h3>
+        <p class="meta">Patrimônio: ${patrimonio}</p>
+        ${localTxt ? `<p class="meta">Localização: ${localTxt}</p>` : ''}
       </div>
       <div class="row-actions">
         <button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>

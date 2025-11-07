@@ -60,7 +60,7 @@ async function getSupabaseClient() {
   }
   if (!supabaseClientPromise) {
     supabaseClientPromise = (async () => {
-      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
       // Singleton: uma única instância por contexto
       return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     })();
@@ -74,12 +74,24 @@ function sanitizeDigits(text) {
 
 async function uploadImage(client, file) {
   if (!file) return null;
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const ALLOWED_EXT = ['jpg','jpeg','png','webp'];
+  const ALLOWED_TYPES = ['image/jpeg','image/png','image/webp'];
+  if (file.size > MAX_SIZE) {
+    throw new Error('Arquivo excede 10MB');
+  }
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Tipo de arquivo não permitido');
+  }
   const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase();
+  if (!ALLOWED_EXT.includes(ext)) {
+    throw new Error('Extensão de arquivo não permitida');
+  }
   const path = `itens/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const { error } = await client.storage.from(SUPABASE_BUCKET).upload(path, file, {
     cacheControl: '3600',
     upsert: false,
-    contentType: file.type || 'image/jpeg',
+    contentType: file.type,
   });
   if (error) throw error;
   const { data } = client.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
@@ -123,7 +135,7 @@ async function getItemsRemote() {
   const client = await getSupabaseClient();
   const { data, error } = await client
     .from(SUPABASE_TABLE)
-    .select('id, numero_patrimonio, nome_objeto, localizacao_texto, foto_objeto_url, foto_localizacao_url, foto_objeto_path, foto_localizacao_path, criado_em')
+    .select('*')
     .order('id', { ascending: false });
   if (error) throw error;
   return (data || []).map(mapRowToItem);
