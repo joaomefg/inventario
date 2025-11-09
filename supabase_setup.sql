@@ -15,7 +15,9 @@ create table if not exists public.inventario (
   -- paths internos no Storage para permitir remoção dos arquivos
   foto_objeto_path text,
   foto_localizacao_path text,
-  criado_em timestamptz not null default now()
+  criado_em timestamptz not null default now(),
+  -- sessão lógica do cliente (visão por sessão)
+  session_id text
 );
 
 -- Evitar patrimônio duplicado
@@ -39,6 +41,7 @@ drop policy if exists inv_select_admin_all on public.inventario;
 drop policy if exists inv_select_estagiario_last on public.inventario;
 drop policy if exists inv_insert_admin on public.inventario;
 drop policy if exists inv_insert_estagiario on public.inventario;
+drop policy if exists inv_select_session_owner on public.inventario;
 
 -- Admins: tabela com e-mails autorizados para escrita/apagar
 create table if not exists public.admins (
@@ -52,6 +55,18 @@ create table if not exists public.estagiarios (
 
 -- Coluna de proprietário para atrelar itens ao usuário
 alter table public.inventario add column if not exists owner_id uuid default auth.uid();
+-- Coluna de sessão para visão por sessão (garante existência antes das policies)
+alter table public.inventario add column if not exists session_id text;
+-- Define DEFAULT para session_id vindo do cabeçalho x-session-id (idempotente)
+do $$
+begin
+  begin
+    alter table public.inventario alter column session_id set default current_setting('request.header.x-session-id', true);
+  exception when others then
+    -- Ignora caso a coluna não exista ou o default já esteja configurado
+    null;
+  end;
+end $$;
 
 -- Função para determinar se o registro é o último do proprietário (evita recursão na policy)
 create or replace function public.is_latest_for_owner(p_owner uuid, p_criado_em timestamptz)
@@ -75,7 +90,9 @@ create policy inv_select_admin_all
   on public.inventario for select
   using (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins));
 
-create policy inv_select_estagiario_last
+-- Seleção por sessão: usuários autenticados veem somente seus itens da sessão atual
+drop policy if exists inv_select_session_owner on public.inventario;
+create policy inv_select_session_owner
   on public.inventario for select
   using (
     auth.role() = 'authenticated'
@@ -191,4 +208,5 @@ create policy storage_delete_admin_inventario
 alter table if exists public.inventario
   add column if not exists localizacao_texto text,
   add column if not exists foto_objeto_path text,
-  add column if not exists foto_localizacao_path text;
+  add column if not exists foto_localizacao_path text,
+  add column if not exists session_id text;

@@ -327,6 +327,12 @@ loginBtn?.addEventListener('click', async () => {
 logoutBtn?.addEventListener('click', async () => {
   try {
     await signOut();
+    // Limpa e oculta imediatamente a lista para não mostrar itens da sessão anterior
+    try {
+      if (busca) busca.value = '';
+      if (lista) lista.innerHTML = '';
+      if (listSection) listSection.hidden = true;
+    } catch {}
     await updateAuthUI();
     await updateBackendStatus();
   } catch (e) {

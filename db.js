@@ -50,22 +50,61 @@ async function deleteItemLocal(id) {
   return withStore('readwrite', (store) => store.delete(id));
 }
 
+// Limpa todos os itens do IndexedDB (somente cliente)
+async function clearLocalItems() {
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // Silencioso: melhor esforço
+  }
+}
+
 // ---------- Supabase (remoto) ----------
 const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-let supabaseClientPromise = null;
+const SESSION_STORAGE_KEY = 'inventarioSessionId';
+let _createClientFn = null;
+let supabaseClient = null;
+let currentSessionId = null; // id lógico por sessão de login
+
+function loadSessionId() {
+  try {
+    const v = localStorage.getItem(SESSION_STORAGE_KEY);
+    return v || null;
+  } catch { return null; }
+}
+
+function saveSessionId(id) {
+  try { localStorage.setItem(SESSION_STORAGE_KEY, String(id || '')); } catch {}
+}
+
+function clearSessionId() {
+  try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
+}
 async function getSupabaseClient() {
   if (!SUPABASE_ENABLED) {
     throw new Error('Supabase não configurado: verifique SUPABASE_URL e SUPABASE_ANON_KEY em config.js');
   }
-  if (!supabaseClientPromise) {
-    supabaseClientPromise = (async () => {
-      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
-      // Singleton: uma única instância por contexto
-      return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    })();
+  if (!_createClientFn) {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    _createClientFn = createClient;
   }
-  return supabaseClientPromise;
+  // Recria cliente se cabeçalho de sessão mudou
+  const needsNew = !supabaseClient || supabaseClient.__sessionId !== (currentSessionId || '');
+  if (needsNew) {
+    supabaseClient = _createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { 'x-session-id': String(currentSessionId || '') } },
+    });
+    supabaseClient.__sessionId = String(currentSessionId || '');
+  }
+  return supabaseClient;
 }
 
 function sanitizeDigits(text) {
@@ -120,6 +159,7 @@ async function addItemRemote(item, files) {
   if (!ownerId) {
     throw new Error('Usuário não autenticado — faça login para salvar no Supabase');
   }
+  const sessionId = currentSessionId || '';
   const objUpload = await uploadImage(client, files?.fotoObjetoFile);
   const locUpload = await uploadImage(client, files?.fotoLocalizacaoFile);
   const payload = {
@@ -132,20 +172,69 @@ async function addItemRemote(item, files) {
     foto_localizacao_path: locUpload?.path || null,
     criado_em: new Date().toISOString(),
     owner_id: ownerId,
+    session_id: sessionId,
   };
-  const { data, error } = await client.from(SUPABASE_TABLE).insert(payload).select('*').single();
+  // Não encadear .select() para evitar falha de RLS na leitura pós-inserção
+  const { error } = await client.from(SUPABASE_TABLE).insert(payload);
   if (error) throw error;
-  return mapRowToItem(data);
+  // UI recarrega a lista depois do addItem; retorno detalhado não é necessário
+  return true;
 }
 
 async function getItemsRemote() {
   const client = await getSupabaseClient();
-  const { data, error } = await client
-    .from(SUPABASE_TABLE)
-    .select('*')
-    .order('id', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(mapRowToItem);
+  // Garantir session_id carregado para usuários autenticados
+  try {
+    const { data: auth } = await client.auth.getUser();
+    const user = auth?.user || null;
+    if (user && !currentSessionId) {
+      currentSessionId = loadSessionId();
+      if (!currentSessionId) {
+        try {
+          currentSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        } catch {
+          currentSessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+        saveSessionId(currentSessionId);
+      }
+      await getSupabaseClient();
+    }
+
+    // Admin vê tudo; não-admin filtra por owner e sessão
+    let query = client.from(SUPABASE_TABLE).select('*').order('id', { ascending: false });
+    if (user) {
+      // Verifica admin de modo leve (falha silenciosa trata como não-admin)
+      let isAdminUser = false;
+      try {
+        const { data: adminRows } = await client
+          .from('admins')
+          .select('email')
+          .ilike('email', user.email)
+          .limit(1);
+        isAdminUser = Array.isArray(adminRows) && adminRows.length > 0;
+      } catch {}
+      if (!isAdminUser) {
+        query = client
+          .from(SUPABASE_TABLE)
+          .select('*')
+          .eq('owner_id', user.id)
+          .eq('session_id', String(currentSessionId || ''))
+          .order('id', { ascending: false });
+      }
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(mapRowToItem);
+  } catch (e) {
+    // Mantém comportamento anterior
+    const { data, error } = await client
+      .from(SUPABASE_TABLE)
+      .select('*')
+      .order('id', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapRowToItem);
+  }
 }
 
 async function deleteItemRemote(id) {
@@ -217,6 +306,13 @@ export async function getItems() {
       return await getItemsRemote();
     } catch (e) {
       console.error('Falha ao listar do Supabase, usando local:', e);
+      // Evita mostrar itens locais quando não autenticado
+      try {
+        const client = await getSupabaseClient();
+        const { data } = await client.auth.getUser();
+        const user = data?.user || null;
+        if (!user) return [];
+      } catch {}
       return getItemsLocal();
     }
   }
@@ -263,6 +359,15 @@ export async function signIn(email, password) {
   const client = await getSupabaseClient();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  // Gera um session_id lógico e recria o cliente com cabeçalho
+  try {
+    currentSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  } catch {
+    currentSessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+  saveSessionId(currentSessionId);
+  // Recria cliente com o novo header
+  await getSupabaseClient();
   return data?.user || null;
 }
 
@@ -270,6 +375,12 @@ export async function signOut() {
   const client = await getSupabaseClient();
   const { error } = await client.auth.signOut();
   if (error) throw error;
+  // Limpa header de sessão e recria cliente
+  currentSessionId = null;
+  clearSessionId();
+  await getSupabaseClient();
+  // Limpa itens locais ao sair para que não persistam entre sessões
+  await clearLocalItems();
   return true;
 }
 
@@ -277,7 +388,22 @@ export async function getAuthUser() {
   const client = await getSupabaseClient();
   const { data, error } = await client.auth.getUser();
   if (error) return null;
-  return data?.user || null;
+  const user = data?.user || null;
+  // Se existe usuário autenticado mas não temos session_id, restabelece da storage ou cria
+  if (user && !currentSessionId) {
+    currentSessionId = loadSessionId();
+    if (!currentSessionId) {
+      try {
+        currentSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      } catch {
+        currentSessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+      saveSessionId(currentSessionId);
+    }
+    // Reaplica o cabeçalho no cliente atual
+    await getSupabaseClient();
+  }
+  return user;
 }
 
 // Verifica se o usuário autenticado é admin (pela tabela public.admins)
