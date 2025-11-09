@@ -10,6 +10,13 @@
     <header class="app-header">
       <h1>Invetário</h1>
       <div id="backendStatus" class="backend-status" role="status" aria-live="polite"></div>
+      <div id="authBar" class="auth-bar" aria-live="polite" style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span id="userStatus" class="hint">Não autenticado</span>
+        <input id="adminEmail" type="email" placeholder="E-mail do admin" style="max-width:220px" autocomplete="username" />
+        <input id="adminPassword" type="password" placeholder="Senha" style="max-width:160px" autocomplete="current-password" />
+        <button id="loginBtn" class="btn">Entrar</button>
+        <button id="logoutBtn" class="btn" style="display:none">Sair</button>
+      </div>
     </header>
 
     <main class="container">
@@ -61,7 +68,7 @@
         </form>
       </section>
 
-      <section class="card">
+      <section id="listSection" class="card" hidden>
         <div class="list-header">
           <h2>Itens cadastrados</h2>
           <input id="busca" type="search" placeholder="Buscar por patrimônio, nome ou localização" />
@@ -93,6 +100,18 @@
         <div class="actions" style="margin-top:10px">
           <button type="button" id="confirmDelete" class="btn primary">Remover</button>
           <button type="button" id="cancelDelete" class="btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de autenticação necessária -->
+    <div id="authRequiredOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="modal">
+        <h2>Autenticação necessária</h2>
+        <p class="hint">Você precisa estar autenticado para adicionar itens.</p>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" id="goLogin" class="btn primary">Entrar agora</button>
+          <button type="button" id="closeAuthRequired" class="btn">Fechar</button>
         </div>
       </div>
     </div>

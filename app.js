@@ -1,4 +1,4 @@
-import { addItem, getItems, deleteItem, getBackendStatus } from './db.js';
+import { addItem, getItems, deleteItem, getBackendStatus, signIn, signOut, getAuthUser, isAdmin } from './db.js';
 
 const form = document.getElementById('item-form');
 const lista = document.getElementById('itens-lista');
@@ -20,6 +20,18 @@ const confirmOverlay = document.getElementById('confirmOverlay');
 const confirmText = document.getElementById('confirmText');
 const confirmDeleteBtn = document.getElementById('confirmDelete');
 const cancelDeleteBtn = document.getElementById('cancelDelete');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const userStatus = document.getElementById('userStatus');
+const adminEmailInput = document.getElementById('adminEmail');
+const adminPasswordInput = document.getElementById('adminPassword');
+const listSection = document.getElementById('listSection');
+const authRequiredOverlay = document.getElementById('authRequiredOverlay');
+const goLoginBtn = document.getElementById('goLogin');
+const closeAuthRequiredBtn = document.getElementById('closeAuthRequired');
+
+// Estado: se o usuário atual é admin (controla botão Remover)
+let userIsAdmin = false;
 
 function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -96,6 +108,9 @@ function cardTemplate(item) {
   const localTxt = escapeHtml(item.localizacaoTexto || '');
   const objUrl = safeImgUrl(item.fotoObjeto);
   const locUrl = safeImgUrl(item.fotoLocalizacao);
+  const removeBtn = userIsAdmin
+    ? `<button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>`
+    : '';
   return `
     <div class="item-card list-row" data-id="${item.id}">
       <div class="thumbs">
@@ -108,7 +123,7 @@ function cardTemplate(item) {
         ${localTxt ? `<p class="meta">Localização: ${localTxt}</p>` : ''}
       </div>
       <div class="row-actions">
-        <button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>
+        ${removeBtn}
       </div>
     </div>
   `;
@@ -171,6 +186,27 @@ cancelDeleteBtn?.addEventListener('click', () => {
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  // Bloqueia criação se não estiver autenticado e mostra modal
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      if (authRequiredOverlay) {
+        authRequiredOverlay.classList.remove('hidden');
+        authRequiredOverlay.setAttribute('aria-hidden', 'false');
+      } else {
+        alert('Você precisa estar autenticado para adicionar itens.');
+      }
+      return;
+    }
+  } catch (e) {
+    if (authRequiredOverlay) {
+      authRequiredOverlay.classList.remove('hidden');
+      authRequiredOverlay.setAttribute('aria-hidden', 'false');
+    } else {
+      alert('Autenticação indisponível. Faça login para continuar.');
+    }
+    return;
+  }
   const numeroPatrimonio = document.getElementById('numeroPatrimonio').value.trim();
   const nomeObjeto = document.getElementById('nomeObjeto').value;
   const localizacaoTexto = localizacaoTextoInput?.value?.trim() || '';
@@ -237,6 +273,83 @@ async function updateBackendStatus() {
 }
 
 updateBackendStatus();
+
+// ---------- Autenticação (admin) ----------
+async function updateAuthUI() {
+  if (!userStatus) return;
+  try {
+    const user = await getAuthUser();
+    if (user) {
+      userStatus.textContent = `Autenticado: ${user.email}`;
+      // Atualiza flag de admin e re-renderiza lista para refletir ação de remover
+      try { userIsAdmin = await isAdmin(); } catch { userIsAdmin = false; }
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'inline-block';
+      if (adminEmailInput) adminEmailInput.style.display = 'none';
+      if (adminPasswordInput) adminPasswordInput.style.display = 'none';
+      if (listSection) listSection.hidden = false;
+      await carregarLista(busca.value);
+    } else {
+      userStatus.textContent = 'Não autenticado';
+      userIsAdmin = false;
+      if (loginBtn) loginBtn.style.display = 'inline-block';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (adminEmailInput) adminEmailInput.style.display = 'inline-block';
+      if (adminPasswordInput) adminPasswordInput.style.display = 'inline-block';
+      if (listSection) listSection.hidden = true;
+      await carregarLista(busca.value);
+    }
+  } catch {
+    userStatus.textContent = 'Autenticação indisponível';
+    userIsAdmin = false;
+    if (listSection) listSection.hidden = true;
+    await carregarLista(busca.value);
+  }
+}
+
+loginBtn?.addEventListener('click', async () => {
+  const email = adminEmailInput?.value?.trim();
+  const password = adminPasswordInput?.value || '';
+  if (!email || !password) {
+    window.alert('Informe e-mail e senha');
+    return;
+  }
+  try {
+    await signIn(email, password);
+    await updateAuthUI();
+    await updateBackendStatus();
+    if (adminPasswordInput) adminPasswordInput.value = '';
+  } catch (e) {
+    window.alert(`Falha ao autenticar: ${e?.message || e}`);
+  }
+});
+
+logoutBtn?.addEventListener('click', async () => {
+  try {
+    await signOut();
+    await updateAuthUI();
+    await updateBackendStatus();
+  } catch (e) {
+    window.alert(`Falha ao sair: ${e?.message || e}`);
+  }
+});
+
+updateAuthUI();
+
+// Modal: Autenticação necessária
+goLoginBtn?.addEventListener('click', () => {
+  if (authRequiredOverlay) {
+    authRequiredOverlay.classList.add('hidden');
+    authRequiredOverlay.setAttribute('aria-hidden', 'true');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  adminEmailInput?.focus();
+});
+
+closeAuthRequiredBtn?.addEventListener('click', () => {
+  authRequiredOverlay?.classList.add('hidden');
+  authRequiredOverlay?.setAttribute('aria-hidden', 'true');
+});
 
 // --- Scanner de código de barras ---
 let codeReader = null;

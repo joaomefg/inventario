@@ -29,23 +29,78 @@ create index if not exists inventario_nome_objeto_idx
 -- Ativar RLS
 alter table public.inventario enable row level security;
 
--- Políticas públicas (rápidas para testes)
+-- Reset de políticas anteriores
 drop policy if exists inventario_select_public on public.inventario;
 drop policy if exists inventario_insert_public on public.inventario;
 drop policy if exists inventario_delete_public on public.inventario;
+drop policy if exists inventario_insert_admin on public.inventario;
+drop policy if exists inventario_delete_admin on public.inventario;
+drop policy if exists inv_select_admin_all on public.inventario;
+drop policy if exists inv_select_estagiario_last on public.inventario;
+drop policy if exists inv_insert_admin on public.inventario;
+drop policy if exists inv_insert_estagiario on public.inventario;
 
-create policy inventario_select_public
+-- Admins: tabela com e-mails autorizados para escrita/apagar
+create table if not exists public.admins (
+  email text primary key
+);
+
+-- Estagiários: tabela com e-mails com permissões limitadas
+create table if not exists public.estagiarios (
+  email text primary key
+);
+
+-- Coluna de proprietário para atrelar itens ao usuário
+alter table public.inventario add column if not exists owner_id uuid default auth.uid();
+
+-- Função para determinar se o registro é o último do proprietário (evita recursão na policy)
+create or replace function public.is_latest_for_owner(p_owner uuid, p_criado_em timestamptz)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(p_criado_em = (
+    select max(criado_em)
+    from public.inventario
+    where owner_id = p_owner
+  ), false);
+$$;
+
+grant execute on function public.is_latest_for_owner(uuid, timestamptz) to authenticated, anon;
+
+-- Seleção: Admins veem tudo; Estagiários veem somente o último item que criaram
+create policy inv_select_admin_all
   on public.inventario for select
-  using (true);
+  using (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins));
 
-create policy inventario_insert_public
+create policy inv_select_estagiario_last
+  on public.inventario for select
+  using (
+    auth.role() = 'authenticated'
+    and owner_id = auth.uid()
+  );
+
+-- Inserção: Admins e Estagiários podem inserir; exige que owner_id = auth.uid()
+create policy inv_insert_admin
   on public.inventario for insert
-  with check (true);
-  with check (true);
+  with check (
+    lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins)
+    and auth.uid() = owner_id
+  );
 
-create policy inventario_delete_public
+create policy inv_insert_estagiario
+  on public.inventario for insert
+  with check (
+    auth.role() = 'authenticated'
+    and auth.uid() = owner_id
+  );
+
+-- Remoção: somente admins
+create policy inventario_delete_admin
   on public.inventario for delete
-  using (true);
+  using (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins));
 
 
 -- =============================
@@ -60,6 +115,9 @@ where not exists (select 1 from storage.buckets where id = 'inventario-fotos');
 drop policy if exists storage_select_public_inventario on storage.objects;
 drop policy if exists storage_insert_public_inventario on storage.objects;
 drop policy if exists storage_delete_public_inventario on storage.objects;
+drop policy if exists storage_insert_admin_inventario on storage.objects;
+drop policy if exists storage_delete_admin_inventario on storage.objects;
+drop policy if exists storage_insert_estagiario_inventario on storage.objects;
 
 -- Permitir leitura pública de objetos do bucket
 create policy storage_select_public_inventario
@@ -67,14 +125,28 @@ create policy storage_select_public_inventario
   using (bucket_id = 'inventario-fotos');
 
 -- Permitir upload (insert) para o bucket
-create policy storage_insert_public_inventario
+create policy storage_insert_admin_inventario
   on storage.objects for insert
-  with check (bucket_id = 'inventario-fotos' and name like 'itens/%');
+  with check (
+    bucket_id = 'inventario-fotos' and name like 'itens/%'
+    and lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins)
+  );
+
+-- Permitir upload para Estagiários (para itens). Exclusão continua restrita a admins
+create policy storage_insert_estagiario_inventario
+  on storage.objects for insert
+  with check (
+    bucket_id = 'inventario-fotos' and name like 'itens/%'
+    and auth.role() = 'authenticated'
+  );
 
 -- Permitir delete de objetos do bucket
-create policy storage_delete_public_inventario
+create policy storage_delete_admin_inventario
   on storage.objects for delete
-  using (bucket_id = 'inventario-fotos' and name like 'itens/%');
+  using (
+    bucket_id = 'inventario-fotos' and name like 'itens/%'
+    and (auth.jwt() ->> 'email') in (select email from public.admins)
+  );
 
 
 -- =====================================================

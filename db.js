@@ -114,6 +114,12 @@ function mapRowToItem(row) {
 
 async function addItemRemote(item, files) {
   const client = await getSupabaseClient();
+  // Garantir vínculo do item ao usuário autenticado para passar nas policies
+  const { data: auth } = await client.auth.getUser();
+  const ownerId = auth?.user?.id || null;
+  if (!ownerId) {
+    throw new Error('Usuário não autenticado — faça login para salvar no Supabase');
+  }
   const objUpload = await uploadImage(client, files?.fotoObjetoFile);
   const locUpload = await uploadImage(client, files?.fotoLocalizacaoFile);
   const payload = {
@@ -125,6 +131,7 @@ async function addItemRemote(item, files) {
     foto_objeto_path: objUpload?.path || null,
     foto_localizacao_path: locUpload?.path || null,
     criado_em: new Date().toISOString(),
+    owner_id: ownerId,
   };
   const { data, error } = await client.from(SUPABASE_TABLE).insert(payload).select('*').single();
   if (error) throw error;
@@ -249,4 +256,45 @@ export async function getBackendStatus() {
     status.error = e?.message || String(e);
   }
   return status;
+}
+
+// ---------- Autenticação (Admin) ----------
+export async function signIn(email, password) {
+  const client = await getSupabaseClient();
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data?.user || null;
+}
+
+export async function signOut() {
+  const client = await getSupabaseClient();
+  const { error } = await client.auth.signOut();
+  if (error) throw error;
+  return true;
+}
+
+export async function getAuthUser() {
+  const client = await getSupabaseClient();
+  const { data, error } = await client.auth.getUser();
+  if (error) return null;
+  return data?.user || null;
+}
+
+// Verifica se o usuário autenticado é admin (pela tabela public.admins)
+export async function isAdmin() {
+  const client = await getSupabaseClient();
+  const { data: auth } = await client.auth.getUser();
+  const email = auth?.user?.email || null;
+  if (!email) return false;
+  try {
+    const { data, error } = await client
+      .from('admins')
+      .select('email')
+      .ilike('email', email)
+      .limit(1);
+    if (error) return false;
+    return Array.isArray(data) && data.length > 0;
+  } catch {
+    return false;
+  }
 }
