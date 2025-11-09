@@ -148,6 +148,8 @@ function mapRowToItem(row) {
     fotoObjetoPath: row.foto_objeto_path || null,
     fotoLocalizacaoPath: row.foto_localizacao_path || null,
     criadoEm: row.criado_em ? new Date(row.criado_em).getTime() : Date.now(),
+    ownerId: row.owner_id || null,
+    ownerEmail: row.owner_email || null,
   };
 }
 
@@ -156,6 +158,7 @@ async function addItemRemote(item, files) {
   // Garantir vínculo do item ao usuário autenticado para passar nas policies
   const { data: auth } = await client.auth.getUser();
   const ownerId = auth?.user?.id || null;
+  const ownerEmail = auth?.user?.email || null;
   if (!ownerId) {
     throw new Error('Usuário não autenticado — faça login para salvar no Supabase');
   }
@@ -173,6 +176,7 @@ async function addItemRemote(item, files) {
     criado_em: new Date().toISOString(),
     owner_id: ownerId,
     session_id: sessionId,
+    owner_email: ownerEmail || null,
   };
   // Não encadear .select() para evitar falha de RLS na leitura pós-inserção
   const { error } = await client.from(SUPABASE_TABLE).insert(payload);

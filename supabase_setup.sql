@@ -68,6 +68,31 @@ begin
   end;
 end $$;
 
+-- Coluna de e-mail do proprietário (para exibir quem adicionou o item)
+alter table public.inventario add column if not exists owner_email text;
+do $$
+begin
+  begin
+    alter table public.inventario alter column owner_email set default lower(auth.jwt() ->> 'email');
+  exception when others then
+    null;
+  end;
+end $$;
+
+-- Backfill: preencher owner_email para registros existentes usando auth.users
+do $$
+begin
+  begin
+    update public.inventario inv
+      set owner_email = lower(u.email)
+    from auth.users u
+    where inv.owner_email is null
+      and inv.owner_id = u.id;
+  exception when others then
+    null;
+  end;
+end $$;
+
 -- Função para determinar se o registro é o último do proprietário (evita recursão na policy)
 create or replace function public.is_latest_for_owner(p_owner uuid, p_criado_em timestamptz)
 returns boolean

@@ -32,6 +32,8 @@ const closeAuthRequiredBtn = document.getElementById('closeAuthRequired');
 
 // Estado: se o usuário atual é admin (controla botão Remover)
 let userIsAdmin = false;
+let currentUserEmail = null;
+let currentUserId = null;
 
 function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -102,12 +104,24 @@ function safeImgUrl(url) {
   return /^(https?:|blob:|data:)/i.test(s) ? s : '';
 }
 
+function shortId(id) {
+  try {
+    const s = String(id || '');
+    if (!s) return '';
+    return s.length > 8 ? s.slice(0, 8) : s;
+  } catch { return ''; }
+}
+
 function cardTemplate(item) {
   const nome = escapeHtml(item.nomeObjeto);
   const patrimonio = escapeHtml(item.numeroPatrimonio);
   const localTxt = escapeHtml(item.localizacaoTexto || '');
   const objUrl = safeImgUrl(item.fotoObjeto);
   const locUrl = safeImgUrl(item.fotoLocalizacao);
+  const addedByYou = item.ownerId && currentUserId && String(item.ownerId) === String(currentUserId);
+  const ownerEmailText = item.ownerEmail ? escapeHtml(item.ownerEmail) : '';
+  const ownerIdText = item.ownerId ? escapeHtml(shortId(item.ownerId)) : '';
+  const addedByLabel = addedByYou ? 'Você' : (ownerEmailText || ownerIdText || 'Desconhecido');
   const removeBtn = userIsAdmin
     ? `<button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>`
     : '';
@@ -121,6 +135,7 @@ function cardTemplate(item) {
         <h3 class="title">${nome}</h3>
         <p class="meta">Patrimônio: ${patrimonio}</p>
         ${localTxt ? `<p class="meta">Localização: ${localTxt}</p>` : ''}
+        <p class="meta">Adicionado por: ${addedByLabel}</p>
       </div>
       <div class="row-actions">
         ${removeBtn}
@@ -244,8 +259,8 @@ form.addEventListener('reset', () => {
 
 busca.addEventListener('input', (e) => carregarLista(e.target.value));
 
-// Inicialização
-carregarLista();
+// Inicialização: não carregar lista antes de confirmar autenticação
+// A lista será carregada dentro de updateAuthUI()
 
 // Status de backend (Supabase vs local)
 async function updateBackendStatus() {
@@ -281,6 +296,8 @@ async function updateAuthUI() {
     const user = await getAuthUser();
     if (user) {
       userStatus.textContent = `Autenticado: ${user.email}`;
+      currentUserEmail = user.email;
+      currentUserId = user.id;
       // Atualiza flag de admin e re-renderiza lista para refletir ação de remover
       try { userIsAdmin = await isAdmin(); } catch { userIsAdmin = false; }
       if (loginBtn) loginBtn.style.display = 'none';
@@ -292,6 +309,8 @@ async function updateAuthUI() {
     } else {
       userStatus.textContent = 'Não autenticado';
       userIsAdmin = false;
+      currentUserEmail = null;
+      currentUserId = null;
       if (loginBtn) loginBtn.style.display = 'inline-block';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (adminEmailInput) adminEmailInput.style.display = 'inline-block';

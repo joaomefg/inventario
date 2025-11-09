@@ -98,22 +98,22 @@ body {
 /* Lista vertical com linhas */
 .list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 /* Limite de altura e rolagem interna para itens cadastrados */
-#itens-lista.list { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+#itens-lista.list { max-height: 75vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 
 .item-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #0b1220;
-  /* Mantém conteúdo dentro do card */
+  /* Mantém o conteúdo dentro do card com cantos arredondados */
   overflow: hidden;
 }
-.item-card.list-row { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 12px; padding: 10px; }
-.item-card .content { padding: 0; min-width: 0; }
-.item-card .title { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-card .meta { margin: 6px 0 0 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-card.list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 16px 12px 18px; }
+.item-card .content { padding: 0; min-width: 0; display: grid; grid-auto-rows: min-content; }
+.item-card .title { margin: 0; font-size: 16px; white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; overflow-wrap: anywhere; }
+.item-card .meta { margin: 6px 0 0 0; color: var(--muted); font-size: 12px; white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; overflow-wrap: anywhere; }
 .item-card .thumbs { display: flex; gap: 8px; }
 .item-card .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); background: #0a0f1e; flex-shrink: 0; }
-.item-card.list-row { min-height: 84px; }
+.item-card.list-row { min-height: 140px; }
 
 .preview { display: grid; grid-template-columns: repeat(2, minmax(0, 180px)); gap: 8px; margin-top: 8px; }
 .preview img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
