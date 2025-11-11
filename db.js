@@ -111,6 +111,20 @@ function sanitizeDigits(text) {
   return String(text || '').replace(/\D+/g, '');
 }
 
+async function fileToDataUrl(file) {
+  if (!file) return null;
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 async function uploadImage(client, file) {
   if (!file) return null;
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -291,6 +305,116 @@ async function deleteItemRemote(id) {
   if (error) throw error;
 }
 
+async function updateItemLocal(id, updates) {
+  return withStore('readwrite', (store) => {
+    return new Promise((resolve, reject) => {
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (!existing) { resolve(false); return; }
+        const merged = {
+          ...existing,
+          numeroPatrimonio: sanitizeDigits(updates.numeroPatrimonio ?? existing.numeroPatrimonio),
+          nomeObjeto: updates.nomeObjeto ?? existing.nomeObjeto,
+          localizacaoTexto: (updates.localizacaoTexto ?? existing.localizacaoTexto) || null,
+        };
+        if (Object.prototype.hasOwnProperty.call(updates, 'fotoObjeto')) {
+          merged.fotoObjeto = updates.fotoObjeto;
+        }
+        if (Object.prototype.hasOwnProperty.call(updates, 'fotoLocalizacao')) {
+          merged.fotoLocalizacao = updates.fotoLocalizacao;
+        }
+        const putReq = store.put(merged);
+        putReq.onsuccess = () => resolve(true);
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+  });
+}
+
+async function updateItemRemote(id, updates, files) {
+  const client = await getSupabaseClient();
+  // Requer permissões de UPDATE (policy para admins)
+  // Buscar info atual para tratar remoção/substituição de arquivos
+  const { data: row, error: getErr } = await client
+    .from(SUPABASE_TABLE)
+    .select('foto_objeto_path, foto_localizacao_path, foto_objeto_url, foto_localizacao_url')
+    .eq('id', id)
+    .single();
+  if (getErr && getErr.code !== 'PGRST116') throw getErr;
+
+  const derivePath = (url) => {
+    try {
+      if (!url) return null;
+      const u = new URL(url);
+      const parts = u.pathname.split('/');
+      const idx = parts.indexOf('public');
+      if (idx >= 0 && parts[idx + 1] === SUPABASE_BUCKET) {
+        return decodeURIComponent(parts.slice(idx + 2).join('/'));
+      }
+      const sIdx = parts.indexOf('sign');
+      if (sIdx >= 0 && parts[sIdx + 1] === SUPABASE_BUCKET) {
+        return decodeURIComponent(parts.slice(sIdx + 2).join('/'));
+      }
+      return null;
+    } catch { return null; }
+  };
+
+  const payload = {
+    numero_patrimonio: sanitizeDigits(updates.numeroPatrimonio),
+    nome_objeto: updates.nomeObjeto,
+    localizacao_texto: updates.localizacaoTexto || null,
+  };
+
+  // Fotos do objeto — remover, substituir ou manter
+  let newObjUpload = null;
+  let newLocUpload = null;
+  const wantRemoveObj = Boolean(updates.removeFotoObjeto);
+  const wantRemoveLoc = Boolean(updates.removeFotoLocalizacao);
+
+  if (files?.fotoObjetoFile) {
+    newObjUpload = await uploadImage(client, files.fotoObjetoFile);
+  }
+  if (files?.fotoLocalizacaoFile) {
+    newLocUpload = await uploadImage(client, files.fotoLocalizacaoFile);
+  }
+
+  // Prepara payload de acordo com intenção (remover ou substituir)
+  if (wantRemoveObj || newObjUpload) {
+    payload.foto_objeto_url = newObjUpload?.url || null;
+    payload.foto_objeto_path = newObjUpload?.path || null;
+  }
+  if (wantRemoveLoc || newLocUpload) {
+    payload.foto_localizacao_url = newLocUpload?.url || null;
+    payload.foto_localizacao_path = newLocUpload?.path || null;
+  }
+
+  // Tenta atualizar a linha primeiro; se falhar, limpa arquivos novos para evitar órfãos
+  const { error } = await client.from(SUPABASE_TABLE).update(payload).eq('id', id);
+  if (error) {
+    try {
+      const toRemove = [];
+      if (newObjUpload?.path) toRemove.push(newObjUpload.path);
+      if (newLocUpload?.path) toRemove.push(newLocUpload.path);
+      if (toRemove.length) await client.storage.from(SUPABASE_BUCKET).remove(toRemove);
+    } catch {}
+    throw error;
+  }
+
+  // Após sucesso na atualização, remover arquivos antigos conforme necessário
+  try {
+    const oldObjPath = (wantRemoveObj || newObjUpload) ? (row?.foto_objeto_path || derivePath(row?.foto_objeto_url)) : null;
+    const oldLocPath = (wantRemoveLoc || newLocUpload) ? (row?.foto_localizacao_path || derivePath(row?.foto_localizacao_url)) : null;
+    const toRemove = [];
+    if (oldObjPath) toRemove.push(oldObjPath);
+    if (oldLocPath) toRemove.push(oldLocPath);
+    if (toRemove.length) await client.storage.from(SUPABASE_BUCKET).remove(toRemove);
+  } catch {}
+
+  return true;
+}
+
 // ---------- API pública usada pela UI ----------
 export async function addItem(item, files) {
   if (SUPABASE_ENABLED) {
@@ -334,6 +458,26 @@ export async function deleteItem(id) {
     }
   }
   return deleteItemLocal(id);
+}
+
+export async function updateItem(id, updates, files) {
+  if (SUPABASE_ENABLED) {
+    try {
+      await updateItemRemote(id, updates, files);
+      return true;
+    } catch (e) {
+      console.error('Falha ao atualizar no Supabase:', e);
+      // Para edições administrativas, não mascarar erro: propagar para UI
+      throw e;
+    }
+  }
+  // Ambiente local: aplicar mudanças incluindo fotos
+  const extra = { ...updates };
+  if (updates?.removeFotoObjeto) extra.fotoObjeto = null;
+  if (updates?.removeFotoLocalizacao) extra.fotoLocalizacao = null;
+  if (files?.fotoObjetoFile) extra.fotoObjeto = await fileToDataUrl(files.fotoObjetoFile);
+  if (files?.fotoLocalizacaoFile) extra.fotoLocalizacao = await fileToDataUrl(files.fotoLocalizacaoFile);
+  return updateItemLocal(id, extra);
 }
 
 // ---------- Diagnóstico de backend ----------

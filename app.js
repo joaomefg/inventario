@@ -1,4 +1,4 @@
-import { addItem, getItems, deleteItem, getBackendStatus, signIn, signOut, getAuthUser, isAdmin } from './db.js';
+import { addItem, getItems, deleteItem, getBackendStatus, signIn, signOut, getAuthUser, isAdmin, updateItem } from './db.js';
 
 const form = document.getElementById('item-form');
 const lista = document.getElementById('itens-lista');
@@ -11,6 +11,10 @@ const previewFotoObjeto = document.getElementById('previewFotoObjeto');
 const previewFotoLocalizacao = document.getElementById('previewFotoLocalizacao');
 const clearFotoObjetoBtn = document.getElementById('clearFotoObjeto');
 const clearFotoLocalizacaoBtn = document.getElementById('clearFotoLocalizacao');
+const cameraFotoObjetoBtn = document.getElementById('cameraFotoObjeto');
+const galleryFotoObjetoBtn = document.getElementById('galleryFotoObjeto');
+const cameraFotoLocalizacaoBtn = document.getElementById('cameraFotoLocalizacao');
+const galleryFotoLocalizacaoBtn = document.getElementById('galleryFotoLocalizacao');
 const scanBtn = document.getElementById('scanPatrimonio');
 const scannerOverlay = document.getElementById('scannerOverlay');
 const scannerVideo = document.getElementById('scannerVideo');
@@ -36,6 +40,7 @@ const loadingText = document.getElementById('loadingText');
 let userIsAdmin = false;
 let currentUserEmail = null;
 let currentUserId = null;
+let itensCache = [];
 
 function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -63,6 +68,21 @@ function updateClearButtons() {
   clearFotoLocalizacaoBtn.disabled = !(fotoLocalizacaoInput.files && fotoLocalizacaoInput.files.length);
 }
 
+function abrirEscolhaArquivo(inputEl, modo) {
+  // modo: 'camera' | 'arquivo'
+  try {
+    if (modo === 'camera') {
+      inputEl.setAttribute('capture', 'environment');
+      inputEl.setAttribute('accept', 'image/*');
+    } else {
+      inputEl.removeAttribute('capture');
+      inputEl.setAttribute('accept', 'image/*');
+    }
+  } catch {}
+  // Dispara a caixa de diálogo do sistema
+  try { inputEl.click(); } catch {}
+}
+
 fotoObjetoInput.addEventListener('change', () => {
   renderPreview(fotoObjetoInput, previewFotoObjeto);
   updateClearButtons();
@@ -71,6 +91,12 @@ fotoLocalizacaoInput.addEventListener('change', () => {
   renderPreview(fotoLocalizacaoInput, previewFotoLocalizacao);
   updateClearButtons();
 });
+
+// Botões de escolha de origem (formulário de novo item)
+cameraFotoObjetoBtn?.addEventListener('click', () => abrirEscolhaArquivo(fotoObjetoInput, 'camera'));
+galleryFotoObjetoBtn?.addEventListener('click', () => abrirEscolhaArquivo(fotoObjetoInput, 'arquivo'));
+cameraFotoLocalizacaoBtn?.addEventListener('click', () => abrirEscolhaArquivo(fotoLocalizacaoInput, 'camera'));
+galleryFotoLocalizacaoBtn?.addEventListener('click', () => abrirEscolhaArquivo(fotoLocalizacaoInput, 'arquivo'));
 
 clearFotoObjetoBtn.addEventListener('click', () => {
   // Evita ação se não há arquivo selecionado
@@ -103,7 +129,13 @@ function escapeHtml(str) {
 
 function safeImgUrl(url) {
   const s = String(url || '');
-  return /^(https?:|blob:|data:)/i.test(s) ? s : '';
+  if (!/^(https?:|blob:|data:)/i.test(s)) return '';
+  // Evita servir recurso público em cache: adiciona cache-buster para Supabase Storage
+  if (/\/storage\/v1\/object\/public\//.test(s)) {
+    const sep = s.includes('?') ? '&' : '?';
+    return `${s}${sep}v=${Date.now()}`;
+  }
+  return s;
 }
 
 function shortId(id) {
@@ -124,14 +156,17 @@ function cardTemplate(item) {
   const ownerEmailText = item.ownerEmail ? escapeHtml(item.ownerEmail) : '';
   const ownerIdText = item.ownerId ? escapeHtml(shortId(item.ownerId)) : '';
   const addedByLabel = addedByYou ? 'Você' : (ownerEmailText || ownerIdText || 'Desconhecido');
-  const removeBtn = userIsAdmin
-    ? `<button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>`
+  const actions = userIsAdmin
+    ? `
+        <button class="btn icon" data-action="editar" aria-label="Editar item" title="Editar">✏️</button>
+        <button class="btn icon" data-action="remover" aria-label="Remover item" title="Remover">🗑️</button>
+      `
     : '';
   return `
     <div class="item-card list-row" data-id="${item.id}">
       <div class="thumbs">
-        ${objUrl ? `<img src="${objUrl}" alt="Objeto" />` : ''}
-        ${locUrl ? `<img src="${locUrl}" alt="Localização" />` : ''}
+        ${objUrl ? `<img src="${objUrl}" alt="Objeto" onerror="this.src='';this.style.display='none';" />` : ''}
+        ${locUrl ? `<img src="${locUrl}" alt="Localização" onerror="this.src='';this.style.display='none';" />` : ''}
       </div>
       <div class="content">
         <h3 class="title">${nome}</h3>
@@ -140,7 +175,7 @@ function cardTemplate(item) {
         <p class="meta">Adicionado por: ${addedByLabel}</p>
       </div>
       <div class="row-actions">
-        ${removeBtn}
+        ${actions}
       </div>
     </div>
   `;
@@ -156,10 +191,32 @@ async function carregarLista(filtro = '') {
         String(i.nomeObjeto).toLowerCase().includes(termo) ||
         String(i.localizacaoTexto || '').toLowerCase().includes(termo)
       );
+  itensCache = filtrados;
   lista.innerHTML = filtrados.map(cardTemplate).join('');
 }
 
 let pendingDeleteId = null;
+let pendingEditId = null;
+
+// Elementos do modal de edição
+const editOverlay = document.getElementById('editOverlay');
+const editNumeroPatrimonio = document.getElementById('editNumeroPatrimonio');
+const editNomeObjeto = document.getElementById('editNomeObjeto');
+const editLocalizacaoTexto = document.getElementById('editLocalizacaoTexto');
+const saveEditBtn = document.getElementById('saveEdit');
+const cancelEditBtn = document.getElementById('cancelEdit');
+const editFotoObjeto = document.getElementById('editFotoObjeto');
+const editPreviewFotoObjeto = document.getElementById('editPreviewFotoObjeto');
+const editClearFotoObjeto = document.getElementById('editClearFotoObjeto');
+const editFotoLocalizacao = document.getElementById('editFotoLocalizacao');
+const editPreviewFotoLocalizacao = document.getElementById('editPreviewFotoLocalizacao');
+const editClearFotoLocalizacao = document.getElementById('editClearFotoLocalizacao');
+const editCameraFotoObjetoBtn = document.getElementById('editCameraFotoObjeto');
+const editGalleryFotoObjetoBtn = document.getElementById('editGalleryFotoObjeto');
+const editCameraFotoLocalizacaoBtn = document.getElementById('editCameraFotoLocalizacao');
+const editGalleryFotoLocalizacaoBtn = document.getElementById('editGalleryFotoLocalizacao');
+let editRemoveFotoObjeto = false;
+let editRemoveFotoLocalizacao = false;
 
 lista.addEventListener('click', async (e) => {
   const btn = e.target.closest('button');
@@ -175,6 +232,28 @@ lista.addEventListener('click', async (e) => {
     confirmText.textContent = `Tem certeza que deseja remover "${title}" (${patrimonioText})?`;
     confirmOverlay.classList.remove('hidden');
     confirmOverlay.setAttribute('aria-hidden', 'false');
+  } else if (action === 'editar' && id) {
+    // Prepara e abre modal de edição com valores atuais
+    pendingEditId = id;
+    const itemObj = itensCache.find((i) => Number(i.id) === id) || null;
+    const title = itemObj?.nomeObjeto || card.querySelector('.title')?.textContent || '';
+    const patrimonioText = itemObj?.numeroPatrimonio || (card.querySelector('.meta')?.textContent || '').replace('Patrimônio: ', '');
+    const localTxt = itemObj?.localizacaoTexto || '';
+    editNomeObjeto.value = title;
+    editNumeroPatrimonio.value = patrimonioText;
+    editLocalizacaoTexto.value = localTxt;
+
+    // Reset de estado de fotos e previews
+    editRemoveFotoObjeto = false;
+    editRemoveFotoLocalizacao = false;
+    editPreviewFotoObjeto.innerHTML = itemObj?.fotoObjeto ? `<img src="${safeImgUrl(itemObj.fotoObjeto)}" alt="Objeto" />` : '';
+    editPreviewFotoLocalizacao.innerHTML = itemObj?.fotoLocalizacao ? `<img src="${safeImgUrl(itemObj.fotoLocalizacao)}" alt="Localização" />` : '';
+    editClearFotoObjeto.disabled = !itemObj?.fotoObjeto;
+    editClearFotoLocalizacao.disabled = !itemObj?.fotoLocalizacao;
+    if (editFotoObjeto) editFotoObjeto.value = '';
+    if (editFotoLocalizacao) editFotoLocalizacao.value = '';
+    editOverlay.classList.remove('hidden');
+    editOverlay.setAttribute('aria-hidden', 'false');
   }
 });
 
@@ -199,6 +278,112 @@ confirmDeleteBtn?.addEventListener('click', async () => {
 cancelDeleteBtn?.addEventListener('click', () => {
   pendingDeleteId = null;
   fecharConfirmOverlay();
+});
+
+function fecharEditOverlay() {
+  editOverlay?.classList.add('hidden');
+  editOverlay?.setAttribute('aria-hidden', 'true');
+}
+
+// Handlers de preview e limpeza para edição de fotos
+editFotoObjeto?.addEventListener('change', () => {
+  editRemoveFotoObjeto = false;
+  if (editClearFotoObjeto) editClearFotoObjeto.disabled = false;
+  const file = editFotoObjeto.files?.[0] || null;
+  if (!file) { editPreviewFotoObjeto.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { editPreviewFotoObjeto.innerHTML = `<img src="${reader.result}" alt="Objeto" />`; };
+  reader.readAsDataURL(file);
+});
+editFotoLocalizacao?.addEventListener('change', () => {
+  editRemoveFotoLocalizacao = false;
+  if (editClearFotoLocalizacao) editClearFotoLocalizacao.disabled = false;
+  const file = editFotoLocalizacao.files?.[0] || null;
+  if (!file) { editPreviewFotoLocalizacao.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { editPreviewFotoLocalizacao.innerHTML = `<img src="${reader.result}" alt="Localização" />`; };
+  reader.readAsDataURL(file);
+});
+
+// Botões de escolha de origem (edição)
+editCameraFotoObjetoBtn?.addEventListener('click', () => abrirEscolhaArquivo(editFotoObjeto, 'camera'));
+editGalleryFotoObjetoBtn?.addEventListener('click', () => abrirEscolhaArquivo(editFotoObjeto, 'arquivo'));
+editCameraFotoLocalizacaoBtn?.addEventListener('click', () => abrirEscolhaArquivo(editFotoLocalizacao, 'camera'));
+editGalleryFotoLocalizacaoBtn?.addEventListener('click', () => abrirEscolhaArquivo(editFotoLocalizacao, 'arquivo'));
+editClearFotoObjeto?.addEventListener('click', () => {
+  const ok = window.confirm('Tem certeza que deseja remover a foto do objeto?');
+  if (!ok) return;
+  editRemoveFotoObjeto = true;
+  if (editFotoObjeto) editFotoObjeto.value = '';
+  editPreviewFotoObjeto.innerHTML = '';
+});
+editClearFotoLocalizacao?.addEventListener('click', () => {
+  const ok = window.confirm('Tem certeza que deseja remover a foto da localização?');
+  if (!ok) return;
+  editRemoveFotoLocalizacao = true;
+  if (editFotoLocalizacao) editFotoLocalizacao.value = '';
+  editPreviewFotoLocalizacao.innerHTML = '';
+});
+
+saveEditBtn?.addEventListener('click', async () => {
+  if (!pendingEditId) return;
+  const updates = {
+    numeroPatrimonio: editNumeroPatrimonio.value.trim(),
+    nomeObjeto: editNomeObjeto.value.trim(),
+    localizacaoTexto: editLocalizacaoTexto.value.trim(),
+    removeFotoObjeto: editRemoveFotoObjeto,
+    removeFotoLocalizacao: editRemoveFotoLocalizacao,
+  };
+  const files = {
+    fotoObjetoFile: editFotoObjeto?.files?.[0] || null,
+    fotoLocalizacaoFile: editFotoLocalizacao?.files?.[0] || null,
+  };
+  try {
+    loadingText.textContent = 'Salvando edição…';
+    loadingOverlay.classList.remove('hidden');
+    loadingOverlay.setAttribute('aria-hidden', 'false');
+    await updateItem(pendingEditId, updates, files);
+
+    // Atualização otimista do cache e da UI para refletir mudança imediata
+    const idx = itensCache.findIndex((i) => Number(i.id) === Number(pendingEditId));
+    if (idx >= 0) {
+      const changed = { ...itensCache[idx] };
+      changed.numeroPatrimonio = updates.numeroPatrimonio || changed.numeroPatrimonio;
+      changed.nomeObjeto = updates.nomeObjeto || changed.nomeObjeto;
+      changed.localizacaoTexto = updates.localizacaoTexto || changed.localizacaoTexto;
+      // Fotos: se removeu, zera; se escolheu arquivo, usa dataURL temporária
+      if (updates.removeFotoObjeto) {
+        changed.fotoObjeto = null;
+      } else if (files.fotoObjetoFile) {
+        try {
+          changed.fotoObjeto = await readFileAsDataURL(files.fotoObjetoFile);
+        } catch {}
+      }
+      if (updates.removeFotoLocalizacao) {
+        changed.fotoLocalizacao = null;
+      } else if (files.fotoLocalizacaoFile) {
+        try {
+          changed.fotoLocalizacao = await readFileAsDataURL(files.fotoLocalizacaoFile);
+        } catch {}
+      }
+      itensCache[idx] = changed;
+      lista.innerHTML = itensCache.map(cardTemplate).join('');
+    }
+  } catch (err) {
+    console.error('Erro ao editar item:', err);
+    alert('Não foi possível salvar as alterações. Tente novamente.');
+    return;
+  }
+  pendingEditId = null;
+  fecharEditOverlay();
+  loadingOverlay.classList.add('hidden');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+  await carregarLista(busca.value);
+});
+
+cancelEditBtn?.addEventListener('click', () => {
+  pendingEditId = null;
+  fecharEditOverlay();
 });
 
 form.addEventListener('submit', async (e) => {

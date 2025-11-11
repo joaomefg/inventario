@@ -144,6 +144,13 @@ create policy inventario_delete_admin
   on public.inventario for delete
   using (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins));
 
+-- Atualização: somente admins
+drop policy if exists inventario_update_admin on public.inventario;
+create policy inventario_update_admin
+  on public.inventario for update
+  using (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins))
+  with check (lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins));
+
 
 -- =============================
 -- Storage: Bucket e Políticas
@@ -187,7 +194,7 @@ create policy storage_delete_admin_inventario
   on storage.objects for delete
   using (
     bucket_id = 'inventario-fotos' and name like 'itens/%'
-    and (auth.jwt() ->> 'email') in (select email from public.admins)
+    and lower(auth.jwt() ->> 'email') in (select lower(email) from public.admins)
   );
 
 

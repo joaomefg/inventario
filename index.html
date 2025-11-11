@@ -46,7 +46,9 @@
               <label for="fotoObjeto">Foto do objeto</label>
               <input id="fotoObjeto" name="fotoObjeto" type="file" accept="image/*" capture="environment" />
               <div class="preview" id="previewFotoObjeto"></div>
-              <div class="actions" style="margin-top:6px">
+              <div class="actions" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" id="cameraFotoObjeto" class="btn">Tirar foto</button>
+                <button type="button" id="galleryFotoObjeto" class="btn">Escolher do dispositivo</button>
                 <button type="button" id="clearFotoObjeto" class="btn" disabled>Remover foto</button>
               </div>
             </div>
@@ -55,7 +57,9 @@
               <label for="fotoLocalizacao">Localização do objeto</label>
               <input id="fotoLocalizacao" name="fotoLocalizacao" type="file" accept="image/*" capture="environment" />
               <div class="preview" id="previewFotoLocalizacao"></div>
-              <div class="actions" style="margin-top:6px">
+              <div class="actions" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" id="cameraFotoLocalizacao" class="btn">Tirar foto</button>
+                <button type="button" id="galleryFotoLocalizacao" class="btn">Escolher do dispositivo</button>
                 <button type="button" id="clearFotoLocalizacao" class="btn" disabled>Remover foto</button>
               </div>
             </div>
@@ -100,6 +104,52 @@
         <div class="actions" style="margin-top:10px">
           <button type="button" id="confirmDelete" class="btn primary">Remover</button>
           <button type="button" id="cancelDelete" class="btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de edição de item -->
+    <div id="editOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="modal">
+        <h2>Editar item</h2>
+        <div class="field-group">
+          <label for="editNumeroPatrimonio">Número de patrimônio</label>
+          <input id="editNumeroPatrimonio" type="text" inputmode="numeric" pattern="[0-9]*" required />
+        </div>
+        <div class="field-group">
+          <label for="editNomeObjeto">Nome do objeto</label>
+          <input id="editNomeObjeto" type="text" required />
+        </div>
+        <div class="field-group">
+          <label for="editLocalizacaoTexto">Localização (texto)</label>
+          <input id="editLocalizacaoTexto" type="text" />
+        </div>
+        <div class="two-cols" style="margin-top:8px">
+          <div class="field-group">
+            <label for="editFotoObjeto">Foto do objeto</label>
+            <input id="editFotoObjeto" type="file" accept="image/*" />
+            <div class="preview" id="editPreviewFotoObjeto"></div>
+            <div class="actions" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" id="editCameraFotoObjeto" class="btn">Tirar foto</button>
+              <button type="button" id="editGalleryFotoObjeto" class="btn">Escolher do dispositivo</button>
+              <button type="button" id="editClearFotoObjeto" class="btn" disabled>Remover foto existente</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="editFotoLocalizacao">Localização do objeto</label>
+            <input id="editFotoLocalizacao" type="file" accept="image/*" />
+            <div class="preview" id="editPreviewFotoLocalizacao"></div>
+            <div class="actions" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" id="editCameraFotoLocalizacao" class="btn">Tirar foto</button>
+              <button type="button" id="editGalleryFotoLocalizacao" class="btn">Escolher do dispositivo</button>
+              <button type="button" id="editClearFotoLocalizacao" class="btn" disabled>Remover foto existente</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" id="saveEdit" class="btn primary">Salvar</button>
+          <button type="button" id="cancelEdit" class="btn">Cancelar</button>
         </div>
       </div>
     </div>
