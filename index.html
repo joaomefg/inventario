@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="app-header">
-      <h1>Invetário</h1>
+      <h1>Inventário</h1>
       <div id="backendStatus" class="backend-status" role="status" aria-live="polite"></div>
       <div id="authBar" class="auth-bar" aria-live="polite" style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span id="userStatus" class="hint">Não autenticado</span>
@@ -113,6 +113,14 @@
           <button type="button" id="goLogin" class="btn primary">Entrar agora</button>
           <button type="button" id="closeAuthRequired" class="btn">Fechar</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Overlay de carregamento -->
+    <div id="loadingOverlay" class="overlay hidden" aria-hidden="true" role="status" aria-live="polite">
+      <div class="modal loading">
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="loadingText" class="hint">Carregando… Por favor, aguarde.</p>
       </div>
     </div>
 

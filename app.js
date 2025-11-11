@@ -29,6 +29,8 @@ const listSection = document.getElementById('listSection');
 const authRequiredOverlay = document.getElementById('authRequiredOverlay');
 const goLoginBtn = document.getElementById('goLogin');
 const closeAuthRequiredBtn = document.getElementById('closeAuthRequired');
+const loadingOverlay = document.getElementById('loadingOverlay');
+const loadingText = document.getElementById('loadingText');
 
 // Estado: se o usuário atual é admin (controla botão Remover)
 let userIsAdmin = false;
@@ -222,6 +224,14 @@ form.addEventListener('submit', async (e) => {
     }
     return;
   }
+  // Exibe overlay de carregamento
+  try {
+    if (loadingOverlay) {
+      if (loadingText) loadingText.textContent = 'Salvando item…';
+      loadingOverlay.classList.remove('hidden');
+      loadingOverlay.setAttribute('aria-hidden', 'false');
+    }
+  } catch {}
   const numeroPatrimonio = document.getElementById('numeroPatrimonio').value.trim();
   const nomeObjeto = document.getElementById('nomeObjeto').value;
   const localizacaoTexto = localizacaoTextoInput?.value?.trim() || '';
@@ -242,12 +252,25 @@ form.addEventListener('submit', async (e) => {
     criadoEm: Date.now(),
   };
 
-  await addItem(item, { fotoObjetoFile, fotoLocalizacaoFile });
-  form.reset();
-  previewFotoObjeto.innerHTML = '';
-  previewFotoLocalizacao.innerHTML = '';
-  updateClearButtons();
-  await carregarLista(busca.value);
+  try {
+    await addItem(item, { fotoObjetoFile, fotoLocalizacaoFile });
+    form.reset();
+    previewFotoObjeto.innerHTML = '';
+    previewFotoLocalizacao.innerHTML = '';
+    updateClearButtons();
+    await carregarLista(busca.value);
+  } catch (err) {
+    console.error('Erro ao adicionar item:', err);
+    alert('Não foi possível salvar o item. Tente novamente.');
+  } finally {
+    // Oculta overlay de carregamento
+    try {
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        loadingOverlay.setAttribute('aria-hidden', 'true');
+      }
+    } catch {}
+  }
 });
 
 // Garantir que o reset manual também limpe prévias e desabilite os botões
