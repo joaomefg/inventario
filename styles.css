@@ -151,8 +151,14 @@ body {
   inset: 0;
   background: rgba(0,0,0,0.6);
   display: grid;
+  /* Centraliza no desktop, mas permite rolagem em conteúdos altos */
   place-items: center;
   z-index: 1000;
+  /* Habilita rolagem quando o conteúdo excede a altura da viewport */
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
 }
 .overlay.hidden { display: none; }
 .overlay .modal {
@@ -161,6 +167,9 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
+  /* Garante que o modal não ultrapasse a viewport e tenha rolagem interna */
+  max-height: 92vh;
+  overflow-y: auto;
 }
 #scannerVideo {
   width: 100%;
@@ -186,6 +195,11 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Em telas menores, evita centralização vertical que corta conteúdo longo */
+@media (max-width: 680px) {
+  .overlay { align-items: start; justify-items: center; }
+}
+
 /* Barra de autenticação (layout responsivo e alinhamento) */
 .auth-bar { padding: 6px 0; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .auth-bar .hint { margin: 0; color: var(--muted); text-align: center; }
@@ -207,4 +221,11 @@ body {
   .auth-bar input[type="email"] { width: 100%; max-width: 320px; }
   .auth-bar input[type="password"] { width: 100%; max-width: 320px; }
   .auth-bar .btn { width: auto; }
+}
+/* Bloqueio de rolagem do fundo quando um modal está aberto */
+html.no-scroll,
+body.no-scroll {
+  overflow: hidden !important;
+  height: 100%;
+  overscroll-behavior: none;
 }

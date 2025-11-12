@@ -254,6 +254,11 @@ lista.addEventListener('click', async (e) => {
     if (editFotoLocalizacao) editFotoLocalizacao.value = '';
     editOverlay.classList.remove('hidden');
     editOverlay.setAttribute('aria-hidden', 'false');
+    // Bloqueia rolagem do fundo enquanto o modal estiver aberto
+    try {
+      document.body.classList.add('no-scroll');
+      document.documentElement.classList.add('no-scroll');
+    } catch {}
   }
 });
 
@@ -283,6 +288,11 @@ cancelDeleteBtn?.addEventListener('click', () => {
 function fecharEditOverlay() {
   editOverlay?.classList.add('hidden');
   editOverlay?.setAttribute('aria-hidden', 'true');
+  // Reabilita a rolagem do fundo ao fechar o modal
+  try {
+    document.body.classList.remove('no-scroll');
+    document.documentElement.classList.remove('no-scroll');
+  } catch {}
 }
 
 // Handlers de preview e limpeza para edição de fotos
