@@ -35,6 +35,9 @@ const goLoginBtn = document.getElementById('goLogin');
 const closeAuthRequiredBtn = document.getElementById('closeAuthRequired');
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
+const duplicateOverlay = document.getElementById('duplicateOverlay');
+const duplicateText = document.getElementById('duplicateText');
+const closeDuplicateBtn = document.getElementById('closeDuplicate');
 
 // Estado: se o usuário atual é admin (controla botão Remover)
 let userIsAdmin = false;
@@ -165,8 +168,8 @@ function cardTemplate(item) {
   return `
     <div class="item-card list-row" data-id="${item.id}">
       <div class="thumbs">
-        ${objUrl ? `<img src="${objUrl}" alt="Objeto" onerror="this.src='';this.style.display='none';" />` : ''}
-        ${locUrl ? `<img src="${locUrl}" alt="Localização" onerror="this.src='';this.style.display='none';" />` : ''}
+        ${objUrl ? `<img src="${objUrl}" alt="Objeto" />` : ''}
+        ${locUrl ? `<img src="${locUrl}" alt="Localização" />` : ''}
       </div>
       <div class="content">
         <h3 class="title">${nome}</h3>
@@ -181,6 +184,20 @@ function cardTemplate(item) {
   `;
 }
 
+function attachListImageErrorHandlers() {
+  try {
+    const imgs = lista?.querySelectorAll('.item-card img') || [];
+    imgs.forEach((img) => {
+      img.addEventListener('error', () => {
+        try {
+          img.src = '';
+          img.style.display = 'none';
+        } catch {}
+      }, { once: true });
+    });
+  } catch {}
+}
+
 async function carregarLista(filtro = '') {
   const itens = await getItems();
   const termo = filtro.trim().toLowerCase();
@@ -193,6 +210,7 @@ async function carregarLista(filtro = '') {
       );
   itensCache = filtrados;
   lista.innerHTML = filtrados.map(cardTemplate).join('');
+  attachListImageErrorHandlers();
 }
 
 let pendingDeleteId = null;
@@ -378,6 +396,7 @@ saveEditBtn?.addEventListener('click', async () => {
       }
       itensCache[idx] = changed;
       lista.innerHTML = itensCache.map(cardTemplate).join('');
+      attachListImageErrorHandlers();
     }
   } catch (err) {
     console.error('Erro ao editar item:', err);
@@ -432,6 +451,28 @@ form.addEventListener('submit', async (e) => {
   const localizacaoTexto = localizacaoTextoInput?.value?.trim() || '';
   const fotoObjetoFile = fotoObjetoInput.files[0];
   const fotoLocalizacaoFile = fotoLocalizacaoInput.files[0];
+
+  try {
+    const normalized = String(numeroPatrimonio).replace(/\D+/g, '');
+    const existentes = await getItems();
+    const duplicado = (existentes || []).some((i) => String(i?.numeroPatrimonio || '').replace(/\D+/g, '') === normalized);
+    if (duplicado) {
+      try {
+        if (loadingOverlay) {
+          loadingOverlay.classList.add('hidden');
+          loadingOverlay.setAttribute('aria-hidden', 'true');
+        }
+      } catch {}
+      if (duplicateOverlay) {
+        if (duplicateText) duplicateText.textContent = `Já existe um item com o número de patrimônio ${normalized}.`;
+        duplicateOverlay.classList.remove('hidden');
+        duplicateOverlay.setAttribute('aria-hidden', 'false');
+      } else {
+        alert(`Já existe um item com o número de patrimônio ${normalized}.`);
+      }
+      return;
+    }
+  } catch {}
 
   const [fotoObjeto, fotoLocalizacao] = await Promise.all([
     readFileAsDataURL(fotoObjetoFile),
@@ -592,6 +633,11 @@ goLoginBtn?.addEventListener('click', () => {
 closeAuthRequiredBtn?.addEventListener('click', () => {
   authRequiredOverlay?.classList.add('hidden');
   authRequiredOverlay?.setAttribute('aria-hidden', 'true');
+});
+ 
+closeDuplicateBtn?.addEventListener('click', () => {
+  duplicateOverlay?.classList.add('hidden');
+  duplicateOverlay?.setAttribute('aria-hidden', 'true');
 });
 
 // --- Scanner de código de barras ---

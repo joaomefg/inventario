@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://mxwyiqdaovszuajiscpe.supabase.co https://cdn.jsdelivr.net; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>Inventário Escolar</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -162,6 +164,17 @@
         <div class="actions" style="margin-top:10px">
           <button type="button" id="goLogin" class="btn primary">Entrar agora</button>
           <button type="button" id="closeAuthRequired" class="btn">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de item duplicado -->
+    <div id="duplicateOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="modal">
+        <h2>Item já cadastrado</h2>
+        <p id="duplicateText" class="hint">Já existe um item com este número de patrimônio.</p>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" id="closeDuplicate" class="btn">Fechar</button>
         </div>
       </div>
     </div>
